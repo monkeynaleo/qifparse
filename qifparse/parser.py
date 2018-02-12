@@ -41,11 +41,16 @@ class QifParser(object):
     _thousands_separator = ','
 
     @classmethod
-    def parse(cls_, file_handle, date_format=None, months_first=None, thousands_separator=None):
+    def parse(cls_, file_handle, date_format=None,
+              months_first=None,
+              thousands_separator=None,
+              currency_num_fractional_digits=None):
         if months_first is not None:
             cls_._months_first = months_first
         if thousands_separator is not None:
             cls_._thousands_separator = thousands_separator
+        if currency_num_fractional_digits is not None:
+            Qif.set_currency_num_fractional_digits(int(currency_num_fractional_digits))
         if isinstance(file_handle, type('')):
             raise RuntimeError(
                 six.u("parse() takes in a file handle, not a string"))
@@ -249,6 +254,8 @@ class QifParser(object):
                 curItem.num = line[1:]
             elif line[0] == 'T':
                 curItem.amount = convertFloat(line[1:])
+            elif line[0] == 'U':
+                curItem.amount_U = convertFloat(line[1:])
             elif line[0] == 'C':
                 curItem.cleared = line[1:]
             elif line[0] == 'P':
