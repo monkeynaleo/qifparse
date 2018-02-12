@@ -74,7 +74,7 @@ class QifParser(object):
             if not chunk:
                 continue
             first_line = chunk.split('\n')[0]
-            first_line = first_line.rstrip()
+            first_line = first_line.strip()
             if first_line == '!Type:Cat':
                 last_type = 'category'
             elif first_line == '!Account':
@@ -364,9 +364,22 @@ class QifParser(object):
         for i in range(len(qdate)):
             if qdate[i] == " ":
                 qdate = qdate[:i] + "0" + qdate[i+1:]
+
         if len(qdate) == 10:  # new form with YYYY date
-            iso_date = qdate[6:10] + "-" + qdate[3:5] + "-" + qdate[0:2]
-            return datetime.strptime(iso_date, '%Y-%m-%d')
+            year = qdate[6:10]
+            if cls_._months_first:
+                month = qdate[0:2]
+                day = qdate[3:5]
+            else:
+                month = qdate[3:5]
+                day = qdate[0:2]
+            iso_date = year + "-" + month + "-" + day
+            try:
+                dtime = datetime.strptime(iso_date, '%Y-%m-%d')
+            except:
+                raise ValueError("ERROR in time format QIF(%s) ISO(%s)" % (qdate, iso_date))
+            return dtime
+
         if qdate[5] == "'":
             C = "20"
         else:
