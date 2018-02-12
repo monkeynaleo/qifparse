@@ -297,8 +297,7 @@ class QifParser(object):
                 split.address.append(line[1:])
             elif line[0] == '$':
                 split = curItem.splits[-1]
-                # split.amount = convertFloat(line[1:-1])
-                split.amount = "%.2f" % convertFloat(line[1:-1])
+                split.amount = convertFloat(line[1:-1])
             else:
                 # don't recognise this line; ignore it
                 print ("Skipping unknown line:\n" + str(line))

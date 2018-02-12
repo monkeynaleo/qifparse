@@ -185,7 +185,7 @@ class Transaction(BaseEntry):
     _fields = [
         Field('date', 'datetime', 'D', required=True, default=datetime.now()),
         Field('num', 'string', 'N'),
-        Field('amount', 'decimal', 'T', required=True),
+        Field('amount', 'decimal', 'T', required=True, custom_print_format='%s%.2f'),
         Field('cleared', 'string', 'C'),
         Field('payee', 'string', 'P'),
         Field('memo', 'string', 'M'),
@@ -240,7 +240,7 @@ class AmountSplit(BaseEntry):
     _fields = [
         Field('category', 'string', 'S'),
         Field('to_account', 'reference', 'S'),
-        Field('amount', 'decimal', '$'),
+        Field('amount', 'decimal', '$', custom_print_format='%s%.2f'),
         Field('percent', 'string', '%'),
         Field('address', 'multilinestring', 'A'),
         Field('memo', 'string', 'M'),
