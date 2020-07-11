@@ -16,7 +16,7 @@ from qifparse.qif import (
 NON_INVST_ACCOUNT_TYPES = [
     '!Type:Cash',
     '!Type:Bank',
-    '!Type:Ccard',
+    '!Type:CCard',
     '!Type:Oth A',
     '!Type:Oth L',
     '!Type:Invoice',  # Quicken for business only
@@ -33,6 +33,8 @@ class QifParserException(Exception):
 
 
 class QifParser(object):
+    # to support input formats of month/day/year or day/month/year formats we use a boolean that users can set
+    MONTH_IS_BEFORE_DAY_IN_DATES = False
 
     @classmethod
     def parse(cls_, file_handle, date_format=None):
@@ -58,7 +60,7 @@ class QifParser(object):
         for chunk in chunks:
             if not chunk:
                 continue
-            first_line = chunk.split('\n')[0]
+            first_line = chunk.split('\n')[0].rstrip()
             if first_line == '!Type:Cat':
                 last_type = 'category'
             elif first_line == '!Account':
@@ -76,14 +78,16 @@ class QifParser(object):
                 transactions_header = first_line
             elif first_line in OPTIONS:
                 continue
+                # currently assume only accounts are handled this way
+                last_type = 'account'
             elif chunk.startswith('!'):
-                raise QifParserException('Header not reconized')
+                raise QifParserException('Header not recognized: <{}>'.format(first_line))
             # if no header is recognized then
             # we use the previous one
             item = parsers[last_type](chunk)
             if last_type == 'account':
                 qif_obj.add_account(item)
-                last_account = item
+                last_account = qif_obj.get_accounts(name=item.name, atype=item.account_type)[0]
             elif last_type == 'transaction'\
                     or last_type == 'memorized' or last_type == 'investment':
                 if last_account:
@@ -147,7 +151,7 @@ class QifParser(object):
         curItem = Account()
         lines = chunk.split('\n')
         for line in lines:
-            if not len(line) or line[0] == '\n' or line.startswith('!Account'):
+            if not len(line) or line[0] == '\n' or line.startswith('!Account') or line.startswith('!Option:AutoSwitch') or line.startswith('!Clear:AutoSwitch'):
                 continue
             elif line[0] == 'N':
                 curItem.name = line[1:]
@@ -166,6 +170,14 @@ class QifParser(object):
         return curItem
 
     @classmethod
+    def parseAmount(cls_, amount):
+        """Parse an amount into a Decimal.
+
+        Handle removing commas, since newer versions of Quicken use 1,000.00 for one-thousand.
+        """
+        return Decimal(amount.replace(',', ''))
+
+    @classmethod
     def parseMemorizedTransaction(cls_, chunk, date_format=None):
         """
         """
@@ -178,8 +190,8 @@ class QifParser(object):
             if not len(line) or line[0] == '\n' or \
                     line.startswith('!Type:Memorized'):
                 continue
-            elif line[0] == 'T':
-                curItem.amount = Decimal(line[1:])
+            elif line[0] in ('T', 'U'):
+                curItem.amount = cls_.parseAmount(line[1:])
             elif line[0] == 'C':
                 curItem.cleared = line[1:]
             elif line[0] == 'P':
@@ -216,7 +228,7 @@ class QifParser(object):
                 split.address.append(line[1:])
             elif line[0] == '$':
                 split = curItem.splits[-1]
-                split.amount = Decimal(line[1:])
+                split.amount = cls_.parseAmount(line[1:])
             else:
                 # don't recognise this line; ignore it
                 print ("Skipping unknown line:\n" + str(line))
@@ -238,8 +250,8 @@ class QifParser(object):
                 curItem.date = cls_.parseQifDateTime(line[1:])
             elif line[0] == 'N':
                 curItem.num = line[1:]
-            elif line[0] == 'T':
-                curItem.amount = Decimal(line[1:])
+            elif line[0] in ('T', 'U'):
+                curItem.amount = cls_.parseAmount(line[1:])
             elif line[0] == 'C':
                 curItem.cleared = line[1:]
             elif line[0] == 'P':
@@ -288,7 +300,7 @@ class QifParser(object):
                 split.address.append(line[1:])
             elif line[0] == '$':
                 split = curItem.splits[-1]
-                split.amount = Decimal(line[1:])
+                split.amount = cls_.parseAmount(line[1:])
             else:
                 # don't recognise this line; ignore it
                 print ("Skipping unknown line:\n" + str(line))
@@ -308,16 +320,16 @@ class QifParser(object):
                 continue
             elif line[0] == 'D':
                 curItem.date = cls_.parseQifDateTime(line[1:])
-            elif line[0] == 'T':
-                curItem.amount = Decimal(line[1:])
+            elif line[0] in ('T', 'U'):
+                curItem.amount = cls_.parseAmount(line[1:])
             elif line[0] == 'N':
                 curItem.action = line[1:]
             elif line[0] == 'Y':
                 curItem.security = line[1:]
             elif line[0] == 'I':
-                curItem.price = Decimal(line[1:])
+                curItem.price = cls_.parseAmount(line[1:])
             elif line[0] == 'Q':
-                curItem.quantity = Decimal(line[1:])
+                curItem.quantity = cls_.parseAmount(line[1:])
             elif line[0] == 'C':
                 curItem.cleared = line[1:]
             elif line[0] == 'M':
@@ -327,9 +339,9 @@ class QifParser(object):
             elif line[0] == 'L':
                 curItem.to_account = line[2:-1]
             elif line[0] == '$':
-                curItem.amount_transfer = Decimal(line[1:])
+                curItem.amount_transfer = cls_.parseAmount(line[1:])
             elif line[0] == 'O':
-                curItem.commission = Decimal(line[1:])
+                curItem.commission = cls_.parseAmount(line[1:])
         return curItem
 
     @classmethod
@@ -341,6 +353,11 @@ class QifParser(object):
              or, (Paypal 2011) like "3/2/2011".
         ISO is like   YYYY-MM-DD  I think @@check
         """
+        if cls_.MONTH_IS_BEFORE_DAY_IN_DATES:
+            DATE_FORMAT = '%Y-%d-%m'
+        else:
+            DATE_FORMAT = '%Y-%m-%d'
+
         if qdate[1] == "/":
             qdate = "0" + qdate   # Extend month to 2 digits
         if qdate[4] == "/":
@@ -350,10 +367,14 @@ class QifParser(object):
                 qdate = qdate[:i] + "0" + qdate[i+1:]
         if len(qdate) == 10:  # new form with YYYY date
             iso_date = qdate[6:10] + "-" + qdate[3:5] + "-" + qdate[0:2]
-            return datetime.strptime(iso_date, '%Y-%m-%d')
+            try:
+                return datetime.strptime(iso_date, DATE_FORMAT)
+            except:
+                import pdb; pdb.set_trace()
+                pass
         if qdate[5] == "'":
             C = "20"
         else:
             C = "19"
         iso_date = C + qdate[6:8] + "-" + qdate[3:5] + "-" + qdate[0:2]
-        return datetime.strptime(iso_date, '%Y-%m-%d')
+        return datetime.strptime(iso_date, DATE_FORMAT)
