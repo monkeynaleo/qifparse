@@ -14,10 +14,18 @@ from qifparse.qif import (
     Qif,
 )
 
+
+def convertFloat(num_str):
+    """Convert float, possibly with embedded thousands separators"""
+    num_str = num_str.replace(QifParser._thousands_separator, '')
+    return Decimal(num_str)
+
+
 NON_INVST_ACCOUNT_TYPES = [
     '!Type:Cash',
     '!Type:Bank',
     '!Type:Ccard',
+    '!Type:CCard',    # Some Quicken exports 
     '!Type:Oth A',
     '!Type:Oth L',
     '!Type:Invoice',  # Quicken for business only
@@ -35,8 +43,20 @@ class QifParserException(Exception):
 
 class QifParser(object):
 
+    _months_first = False
+    _thousands_separator = ','
+
     @classmethod
-    def parse(cls_, file_handle, date_format=None):
+    def parse(cls_, file_handle, date_format=None,
+              months_first=None,
+              thousands_separator=None,
+              currency_num_fractional_digits=None):
+        if months_first is not None:
+            cls_._months_first = months_first
+        if thousands_separator is not None:
+            cls_._thousands_separator = thousands_separator
+        if currency_num_fractional_digits is not None:
+            Qif.set_currency_num_fractional_digits(int(currency_num_fractional_digits))
         if isinstance(file_handle, type('')):
             raise RuntimeError(
                 six.u("parse() takes in a file handle, not a string"))
@@ -61,6 +81,7 @@ class QifParser(object):
             if not chunk:
                 continue
             first_line = chunk.split('\n')[0]
+            first_line = first_line.strip()
             if first_line == '!Type:Cat':
                 last_type = 'category'
             elif first_line == '!Account':
@@ -234,7 +255,7 @@ class QifParser(object):
                 split.address.append(line[1:])
             elif line[0] == '$':
                 split = curItem.splits[-1]
-                split.amount = Decimal(line[1:])
+                split.amount = convertFloat(line[1:])
             else:
                 # don't recognise this line; ignore it
                 print ("Skipping unknown line:\n" + str(line))
@@ -257,7 +278,9 @@ class QifParser(object):
             elif line[0] == 'N':
                 curItem.num = line[1:]
             elif line[0] == 'T':
-                curItem.amount = Decimal(line[1:])
+                curItem.amount = convertFloat(line[1:])
+            elif line[0] == 'U':
+                curItem.amount_U = convertFloat(line[1:])
             elif line[0] == 'C':
                 curItem.cleared = line[1:]
             elif line[0] == 'P':
@@ -306,7 +329,7 @@ class QifParser(object):
                 split.address.append(line[1:])
             elif line[0] == '$':
                 split = curItem.splits[-1]
-                split.amount = Decimal(line[1:])
+                split.amount = convertFloat(line[1:-1])
             else:
                 # don't recognise this line; ignore it
                 print ("Skipping unknown line:\n" + str(line))
@@ -327,7 +350,7 @@ class QifParser(object):
             elif line[0] == 'D':
                 curItem.date = cls_.parseQifDateTime(line[1:])
             elif line[0] == 'T':
-                curItem.amount = Decimal(line[1:])
+                curItem.amount = convertFloat(line[1:])
             elif line[0] == 'N':
                 curItem.action = line[1:]
             elif line[0] == 'Y':
@@ -366,12 +389,36 @@ class QifParser(object):
         for i in range(len(qdate)):
             if qdate[i] == " ":
                 qdate = qdate[:i] + "0" + qdate[i+1:]
+
         if len(qdate) == 10:  # new form with YYYY date
-            iso_date = qdate[6:10] + "-" + qdate[3:5] + "-" + qdate[0:2]
-            return datetime.strptime(iso_date, '%Y-%m-%d')
+            year = qdate[6:10]
+            if cls_._months_first:
+                month = qdate[0:2]
+                day = qdate[3:5]
+            else:
+                month = qdate[3:5]
+                day = qdate[0:2]
+            iso_date = year + "-" + month + "-" + day
+            try:
+                dtime = datetime.strptime(iso_date, '%Y-%m-%d')
+            except:
+                raise ValueError("ERROR in time format QIF(%s) ISO(%s)" % (qdate, iso_date))
+            return dtime
+
         if qdate[5] == "'":
             C = "20"
         else:
             C = "19"
-        iso_date = C + qdate[6:8] + "-" + qdate[3:5] + "-" + qdate[0:2]
-        return datetime.strptime(iso_date, '%Y-%m-%d')
+        year = C + qdate[6:8]
+        if cls_._months_first:
+            month = qdate[0:2]
+            day = qdate[3:5]
+        else:
+            month = qdate[3:5]
+            day = qdate[0:2]
+        iso_date = year + "-" + month + "-" + day
+        try:
+            dtime = datetime.strptime(iso_date, '%Y-%m-%d')
+        except:
+            raise ValueError("ERROR in time format QIF(%s) ISO(%s)" % (qdate, iso_date))
+        return dtime
