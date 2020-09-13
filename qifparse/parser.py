@@ -10,7 +10,6 @@ from qifparse.qif import (
     Investment,
     Category,
     Class,
-    Tag,
     Qif,
 )
 
@@ -74,7 +73,6 @@ class QifParser(object):
             'transaction': cls_.parseTransaction,
             'investment': cls_.parseInvestment,
             'class': cls_.parseClass,
-            'tag': cls_.parseTag,
             'memorized': cls_.parseMemorizedTransaction
         }
         for chunk in chunks:
@@ -94,15 +92,13 @@ class QifParser(object):
                 transactions_header = first_line
             elif first_line == '!Type:Class':
                 last_type = 'class'
-            elif first_line == '!Type:Tag':
-                last_type = 'tag'
             elif first_line == '!Type:Memorized':
                 last_type = 'memorized'
                 transactions_header = first_line
             elif first_line in OPTIONS:
                 continue
             elif chunk.startswith('!'):
-                raise QifParserException('Header not reconized {0}'.format(first_line))
+                raise QifParserException('Header not reconized')
             # if no header is recognized then
             # we use the previous one
             item = parsers[last_type](chunk)
@@ -137,20 +133,6 @@ class QifParser(object):
                 curItem.name = line[1:]
             elif line[0] == 'D':
                 curItem.description = line[1:]
-        return curItem
-
-    @classmethod
-    def parseTag(cls_, chunk):
-        """
-        """
-        curItem = Tag()
-        lines = chunk.split('\n')
-        for line in lines:
-            if not len(line) or line[0] == '\n' or \
-                    line.startswith('!Type:Tag'):
-                continue
-            elif line[0] == 'N':
-                curItem.name = line[1:]
         return curItem
 
     @classmethod
