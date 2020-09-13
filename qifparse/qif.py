@@ -23,9 +23,6 @@ MEMORIZED_TRANSACTION_TYPES = [
 
 
 class Qif(object):
-
-    _currency_format = '%.2f'
-
     def __init__(self):
         self._accounts = []
         self._categories = []
@@ -105,17 +102,6 @@ class Qif(object):
             tr.extend(self._transactions.values)
             for acc in self._accounts:
                 tr.extend(acc.transactions)
-
-    @classmethod
-    def set_currency_num_fractional_digits(cls, num):
-        """Set the number of digits in the fractional part of currency values 
-           (for __str__ output)"""
-        cls._currency_format = "%%.%df" % int(num)
-        print("  CUR FORM: ", Qif._currency_format)
-
-    @classmethod
-    def currency_format(cls):
-        return cls._currency_format
 
     def __str__(self):
         res = []
@@ -199,10 +185,7 @@ class Transaction(BaseEntry):
     _fields = [
         Field('date', 'datetime', 'D', required=True, default=datetime.now()),
         Field('num', 'string', 'N'),
-        Field('amount', 'decimal', 'T', required=True,
-              custom_print_format='%s' + Qif.currency_format()),
-        Field('amount_U', 'decimal', 'U',
-              custom_print_format='%s' + Qif.currency_format()),
+        Field('amount', 'decimal', 'T', required=True),
         Field('cleared', 'string', 'C'),
         Field('payee', 'string', 'P'),
         Field('memo', 'string', 'M'),
@@ -257,8 +240,7 @@ class AmountSplit(BaseEntry):
     _fields = [
         Field('category', 'string', 'S'),
         Field('to_account', 'reference', 'S'),
-        Field('amount', 'decimal', '$',
-              custom_print_format='%s' + Qif.currency_format()),
+        Field('amount', 'decimal', '$'),
         Field('percent', 'string', '%'),
         Field('address', 'multilinestring', 'A'),
         Field('memo', 'string', 'M'),
@@ -271,7 +253,7 @@ class Investment(BaseEntry):
         Field('date', 'datetime', 'D', required=True, default=datetime.now()),
         Field('action', 'string', 'N'),
         Field('security', 'string', 'Y'),
-        Field('price', 'decimal', 'I', custom_print_format='%s%.3f'),   # Why 3?
+        Field('price', 'decimal', 'I', custom_print_format='%s%.3f'),
         Field('quantity', 'decimal', 'Q', custom_print_format='%s%.3f'),
         Field('cleared', 'string', 'C'),
         Field('amount', 'decimal', 'T'),
